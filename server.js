@@ -38,7 +38,6 @@ if (!users["admin"]) {
 app.get("/", (req, res) => {
   res.redirect("/login.html");
 });
-
 // 세션 설정 (Redis 스토어 사용)
 app.use(
   session({
