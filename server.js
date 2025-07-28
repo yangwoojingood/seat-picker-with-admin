@@ -17,11 +17,6 @@ redisClient.connect().catch(console.error);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// 기본 경로에서 로그인 페이지로 리디렉션
-app.get("/", (req, res) => {
-  res.redirect("/login.html");
-});
-
 // 세션 설정 (Redis 스토어 사용)
 app.use(
   session({
@@ -49,6 +44,11 @@ if (!users["admin"]) {
   users["admin"] = { password: "admin123", role: "admin" };
   saveUsers(users);
 }
+
+// 루트로 접속 시 로그인 페이지로 리디렉션
+app.get("/", (req, res) => {
+  res.redirect("/login.html");
+});
 
 // 로그인 처리
 app.post("/login", (req, res) => {
