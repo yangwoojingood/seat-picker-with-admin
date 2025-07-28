@@ -8,15 +8,31 @@ const redis = require("redis");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Redis 클라이언트 생성 및 연결
+// Redis 클라이언트 생성
 const redisClient = redis.createClient({
-  url: "redis://localhost:3000" // 실제 배포 환경에 맞게 수정 필요
+  url: "redis://localhost:3000" // 실제 배포 환경에 맞게 변경 필요
 });
 redisClient.connect().catch(console.error);
 
 app.use(express.urlencoded({ extended: true }));
 
-// 사용자 파일 경로 및 함수
+// 루트 경로 요청 먼저 처리
+app.get("/", (req, res) => {
+  console.log("GET / 요청 - 로그인 페이지로 리디렉션");
+  res.redirect("/login.html");
+});
+
+// 세션 설정
+app.use(
+  session({
+    store: new RedisStore({ client: redisClient }),
+    secret: "seat-secret-key",
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+
+// 사용자 파일 함수
 const USERS_FILE = path.join(__dirname, "users.json");
 function loadUsers() {
   if (!fs.existsSync(USERS_FILE)) return {};
@@ -28,25 +44,28 @@ function saveUsers(users) {
 
 let users = loadUsers();
 
-// 기본 관리자 계정 (앱 시작 시 한 번만 저장되게 수정)
 if (!users["admin"]) {
   users["admin"] = { password: "admin123", role: "admin" };
   saveUsers(users);
 }
 
-// 루트로 접속 시 로그인 페이지로 리디렉션
-app.get("/", (req, res) => {
-  res.redirect("/login.html");
-});
-// 세션 설정 (Redis 스토어 사용)
-app.use(
-  session({
-    store: new RedisStore({ client: redisClient }),
-    secret: "seat-secret-key",
-    resave: false,
-    saveUninitialized: false, // 권장 설정
-  })
-);
+// 권한 체크 미들웨어
+function requireAdmin(req, res, next) {
+  if (req.session.loggedIn && req.session.role === "admin") next();
+  else res.redirect("/login.html");
+}
+
+function requireTeacher(req, res, next) {
+  if (req.session.loggedIn && req.session.role === "teacher") next();
+  else res.redirect("/login.html");
+}
+
+// 권한 체크 미들웨어는 정적 파일 전에 위치
+app.use("/index.html", requireTeacher);
+app.use("/admin.html", requireAdmin);
+
+// 정적 파일 서비스는 마지막에
+app.use(express.static(path.join(__dirname, "public")));
 
 // 로그인 처리
 app.post("/login", (req, res) => {
@@ -60,58 +79,6 @@ app.post("/login", (req, res) => {
   } else {
     res.send("<script>alert('로그인 실패'); window.location='/login.html';</script>");
   }
-});
-
-// 관리자 권한 체크 미들웨어
-function requireAdmin(req, res, next) {
-  if (req.session.loggedIn && req.session.role === "admin") {
-    next();
-  } else {
-    res.redirect("/login.html");
-  }
-}
-
-// 선생님 권한 체크 미들웨어
-function requireTeacher(req, res, next) {
-  if (req.session.loggedIn && req.session.role === "teacher") {
-    next();
-  } else {
-    res.redirect("/login.html");
-  }
-}
-
-// 페이지 접근 제한을 먼저 설정
-app.use("/index.html", requireTeacher);
-app.use("/admin.html", requireAdmin);
-
-// 그 후에 정적 파일 서비스
-app.use(express.static(path.join(__dirname, "public")));
-
-// API: 계정 목록 (선생님만)
-app.get("/api/users", requireAdmin, (req, res) => {
-  const userList = Object.entries(users)
-    .filter(([id, u]) => u.role === "teacher")
-    .map(([id]) => ({ id }));
-  res.json(userList);
-});
-
-// API: 계정 추가
-app.post("/api/users/add", requireAdmin, (req, res) => {
-  const { id, pw } = req.body;
-  if (!id || !pw) return res.status(400).send("아이디/비밀번호 입력 필요");
-  if (users[id]) return res.status(400).send("이미 존재하는 아이디입니다");
-  users[id] = { password: pw, role: "teacher" };
-  saveUsers(users);
-  res.redirect("/admin.html");
-});
-
-// API: 계정 삭제
-app.post("/api/users/delete", requireAdmin, (req, res) => {
-  const { id } = req.body;
-  if (id === "admin") return res.status(400).send("관리자 계정은 삭제할 수 없습니다");
-  delete users[id];
-  saveUsers(users);
-  res.redirect("/admin.html");
 });
 
 app.listen(PORT, () => {
