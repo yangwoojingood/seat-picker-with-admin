@@ -4,7 +4,7 @@ const fs = require("fs");
 const session = require("express-session");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
 
@@ -16,7 +16,6 @@ app.use(
   })
 );
 
-// 사용자 데이터 파일 경로 및 함수
 const USERS_FILE = path.join(__dirname, "users.json");
 
 function loadUsers() {
@@ -30,13 +29,17 @@ function saveUsers(users) {
 
 let users = loadUsers();
 
-// 관리자 권한 미들웨어
+if (!users["admin"]) {
+  users["admin"] = { password: "admin123", role: "admin" };
+  saveUsers(users);
+}
+
 function requireAdmin(req, res, next) {
   if (req.session.loggedIn && req.session.role === "admin") next();
   else res.status(403).send("관리자 권한 필요");
 }
 
-// POST /api/users/add 라우트 선언 — 반드시 미들웨어 아래, 정적파일 이전에
+// 라우트 먼저 선언
 app.post("/api/users/add", requireAdmin, (req, res) => {
   const { id, pw } = req.body;
   if (!id || !pw) return res.status(400).send("아이디/비밀번호 입력 필요");
@@ -46,9 +49,9 @@ app.post("/api/users/add", requireAdmin, (req, res) => {
   res.redirect("/admin.html");
 });
 
-// 정적 파일 서비스
+// 정적 파일 서비스는 라우트 선언 **뒤**에
 app.use(express.static(path.join(__dirname, "public")));
 
 app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
+  console.log(`Server listening at http://localhost:${PORT}`);
 });
