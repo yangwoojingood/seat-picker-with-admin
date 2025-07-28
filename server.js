@@ -2,21 +2,32 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const session = require("express-session");
+const RedisStore = require("connect-redis")(session);
+const redis = require("redis");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+// Redis 클라이언트 생성 및 연결
+const redisClient = redis.createClient({
+  url: "redis://localhost:3000" // 실제 배포 환경에 맞게 수정 필요
+});
+redisClient.connect().catch(console.error);
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
+
+// 세션 설정 (Redis 스토어 사용)
 app.use(
   session({
+    store: new RedisStore({ client: redisClient }),
     secret: "seat-secret-key",
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false, // 권장 설정
   })
 );
 
-// Load users from file
+// 사용자 파일 경로 및 함수
 const USERS_FILE = path.join(__dirname, "users.json");
 function loadUsers() {
   if (!fs.existsSync(USERS_FILE)) return {};
@@ -28,9 +39,11 @@ function saveUsers(users) {
 
 let users = loadUsers();
 
-// 기본 관리자 계정
-users["admin"] = { password: "admin123", role: "admin" };
-saveUsers(users);
+// 기본 관리자 계정 (앱 시작 시 한 번만 저장되게 수정 권장)
+if (!users["admin"]) {
+  users["admin"] = { password: "admin123", role: "admin" };
+  saveUsers(users);
+}
 
 // 로그인 처리
 app.post("/login", (req, res) => {
@@ -46,7 +59,7 @@ app.post("/login", (req, res) => {
   }
 });
 
-// 관리자 권한 체크
+// 관리자 권한 체크 미들웨어
 function requireAdmin(req, res, next) {
   if (req.session.loggedIn && req.session.role === "admin") {
     next();
@@ -55,7 +68,7 @@ function requireAdmin(req, res, next) {
   }
 }
 
-// 선생님 권한 체크
+// 선생님 권한 체크 미들웨어
 function requireTeacher(req, res, next) {
   if (req.session.loggedIn && req.session.role === "teacher") {
     next();
@@ -68,11 +81,11 @@ function requireTeacher(req, res, next) {
 app.use("/index.html", requireTeacher);
 app.use("/admin.html", requireAdmin);
 
-// API: 계정 목록
+// API: 계정 목록 (선생님만)
 app.get("/api/users", requireAdmin, (req, res) => {
   const userList = Object.entries(users)
     .filter(([id, u]) => u.role === "teacher")
-    .map(([id, u]) => ({ id }));
+    .map(([id]) => ({ id }));
   res.json(userList);
 });
 
@@ -96,5 +109,5 @@ app.post("/api/users/delete", requireAdmin, (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`http://localhost:${PORT}`);
+  console.log(`Server listening on http://localhost:${PORT}`);
 });
