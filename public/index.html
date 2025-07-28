@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>자리 배정</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>자리 배정 도구</h1>
+  <p>학생 이름 (줄바꿈으로 구분):</p>
+  <textarea id="names" rows="6" style="width: 100%"></textarea><br />
+  <label>열 개수:
+    <input type="number" id="cols" value="5" min="1" />
+  </label>
+  <label>행 개수:
+    <input type="number" id="rows" value="4" min="1" />
+  </label>
+  <br /><br />
+  <button onclick="assignSeats()">자리 배정</button>
+  <button onclick="clearPairs()">짝궁 기록 초기화</button>
+  <div id="seat-map" class="grid"></div>
+
+  <script>
+    let pastPairs = JSON.parse(localStorage.getItem("pastPairs") || "[]");
+
+    function isPastPair(a, b) {
+      return pastPairs.some(pair =>
+        (pair.includes(a) && pair.includes(b))
+      );
+    }
+
+    function assignSeats() {
+      const rows = parseInt(document.getElementById("rows").value);
+      const cols = parseInt(document.getElementById("cols").value);
+      const names = document.getElementById("names").value.trim().split('\n').filter(n => n);
+
+      if (names.length > rows * cols) {
+        alert("자리 수보다 학생이 많습니다!");
+        return;
+      }
+
+      const seating = assignSeatsAvoidingPairs(names, rows, cols);
+      saveCurrentPairs(seating, rows, cols);
+
+      const map = document.getElementById("seat-map");
+      map.innerHTML = '';
+      map.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+      seating.forEach(name => {
+        const div = document.createElement("div");
+        div.className = "seat";
+        div.innerText = name || "";
+        map.appendChild(div);
+      });
+    }
+
+    function assignSeatsAvoidingPairs(names, rows, cols) {
+      const maxAttempts = 100;
+      let attempt = 0;
+
+      while (attempt++ < maxAttempts) {
+        const shuffled = [...names];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        let hasPastPair = false;
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols - 1; j++) {
+            const idx1 = i * cols + j;
+            const idx2 = i * cols + j + 1;
+            const a = shuffled[idx1];
+            const b = shuffled[idx2];
+            if (a && b && isPastPair(a, b)) {
+              hasPastPair = true;
+              break;
+            }
+          }
+          if (hasPastPair) break;
+        }
+
+        if (!hasPastPair) return shuffled;
+      }
+
+      alert("조건을 만족하는 배치를 찾을 수 없습니다. 기록을 초기화하거나 학생 수/자리 수를 조정하세요.");
+      return names;
+    }
+
+    function saveCurrentPairs(seating, rows, cols) {
+      for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols - 1; j++) {
+          const idx1 = i * cols + j;
+          const idx2 = i * cols + j + 1;
+          const a = seating[idx1];
+          const b = seating[idx2];
+          if (a && b) {
+            pastPairs.push([a, b]);
+          }
+        }
+      }
+      localStorage.setItem("pastPairs", JSON.stringify(pastPairs));
+    }
+
+    function clearPairs() {
+      localStorage.removeItem("pastPairs");
+      pastPairs = [];
+      alert("기록 초기화 완료!");
+    }
+  </script>
+</body>
+</html>

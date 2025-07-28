@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>관리자 - 계정 관리</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    input, button { margin: 5px; padding: 5px; }
+  </style>
+</head>
+<body>
+  <h1>👨‍🏫 관리자 계정 관리</h1>
+
+  <h2>📋 선생님 계정 목록</h2>
+  <ul id="userList"></ul>
+
+  <h2>➕ 선생님 계정 추가</h2>
+  <form action="/api/users/add" method="POST">
+    <input name="id" placeholder="아이디" required />
+    <input name="pw" placeholder="비밀번호" required />
+    <button type="submit">추가</button>
+  </form>
+
+  <h2>❌ 선생님 계정 삭제</h2>
+  <form action="/api/users/delete" method="POST">
+    <input name="id" placeholder="삭제할 아이디" required />
+    <button type="submit">삭제</button>
+  </form>
+
+  <script>
+    fetch("/api/users")
+      .then(res => res.json())
+      .then(users => {
+        const list = document.getElementById("userList");
+        users.forEach(u => {
+          const li = document.createElement("li");
+          li.textContent = u.id;
+          list.appendChild(li);
+        });
+      });
+  </script>
+</body>
+</html>
