@@ -15,17 +15,6 @@ const redisClient = redis.createClient({
 redisClient.connect().catch(console.error);
 
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public")));
-
-// 세션 설정 (Redis 스토어 사용)
-app.use(
-  session({
-    store: new RedisStore({ client: redisClient }),
-    secret: "seat-secret-key",
-    resave: false,
-    saveUninitialized: false, // 권장 설정
-  })
-);
 
 // 사용자 파일 경로 및 함수
 const USERS_FILE = path.join(__dirname, "users.json");
@@ -39,7 +28,7 @@ function saveUsers(users) {
 
 let users = loadUsers();
 
-// 기본 관리자 계정 (앱 시작 시 한 번만 저장되게 수정 권장)
+// 기본 관리자 계정 (앱 시작 시 한 번만 저장되게 수정)
 if (!users["admin"]) {
   users["admin"] = { password: "admin123", role: "admin" };
   saveUsers(users);
@@ -49,6 +38,16 @@ if (!users["admin"]) {
 app.get("/", (req, res) => {
   res.redirect("/login.html");
 });
+
+// 세션 설정 (Redis 스토어 사용)
+app.use(
+  session({
+    store: new RedisStore({ client: redisClient }),
+    secret: "seat-secret-key",
+    resave: false,
+    saveUninitialized: false, // 권장 설정
+  })
+);
 
 // 로그인 처리
 app.post("/login", (req, res) => {
@@ -82,9 +81,12 @@ function requireTeacher(req, res, next) {
   }
 }
 
-// 페이지 접근 제한
+// 페이지 접근 제한을 먼저 설정
 app.use("/index.html", requireTeacher);
 app.use("/admin.html", requireAdmin);
+
+// 그 후에 정적 파일 서비스
+app.use(express.static(path.join(__dirname, "public")));
 
 // API: 계정 목록 (선생님만)
 app.get("/api/users", requireAdmin, (req, res) => {
